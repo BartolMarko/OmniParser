@@ -53,12 +53,21 @@ def get_caption_model_processor(model_name, model_name_or_path="Salesforce/blip2
             model_name_or_path, device_map=None, torch_dtype=torch.float16
         ).to(device)
     elif model_name == "florence2":
+        import transformers
         from transformers import AutoProcessor, AutoModelForCausalLM 
         processor = AutoProcessor.from_pretrained("microsoft/Florence-2-base", trust_remote_code=True)
+        _original_get_imports = transformers.dynamic_module_utils.get_imports
+        def _custom_get_imports(filename):
+            imports = _original_get_imports(filename)
+            if "flash_attn" in imports:
+                imports.remove("flash_attn")
+            return imports
+        transformers.dynamic_module_utils.get_imports = _custom_get_imports
+
         if device == 'cpu':
-            model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.float32, trust_remote_code=True)
+            model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.float32, trust_remote_code=True, attn_implementation="sdpa")
         else:
-            model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.float16, trust_remote_code=True).to(device)
+            model = AutoModelForCausalLM.from_pretrained(model_name_or_path, torch_dtype=torch.float16, trust_remote_code=True, attn_implementation="sdpa").to(device)
     return {'model': model.to(device), 'processor': processor}
 
 
